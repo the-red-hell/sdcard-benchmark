@@ -7,7 +7,7 @@
 )]
 
 use embassy_executor::Spawner;
-use embassy_time::{Duration, Timer};
+use embassy_time::Timer;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use embedded_sdmmc::{TimeSource, Timestamp};
 use esp_hal::clock::CpuClock;
@@ -48,8 +48,7 @@ async fn main(spawner: Spawner) -> ! {
         esp_radio::wifi::new(&radio_init, peripherals.WIFI, Default::default())
             .expect("Failed to initialize Wi-Fi controller");
 
-    // TODO: Spawn some tasks
-    let _ = spawner;
+    let _spawned = spawner.spawn(simulate_cpu_traffic());
 
     // --- SPI ---
     let spi_bus = Spi::new(
@@ -60,8 +59,6 @@ async fn main(spawner: Spawner) -> ! {
     .with_sck(peripherals.GPIO6)
     .with_miso(peripherals.GPIO2)
     .with_mosi(peripherals.GPIO7);
-    // .with_dma(dma_channel)
-    // .with_buffers(dma_rx_buf, dma_tx_buf);
 
     let cs = gpio::Output::new(
         peripherals.GPIO10,
@@ -90,7 +87,7 @@ async fn main(spawner: Spawner) -> ! {
     let root_dir = volume0.open_root_dir().unwrap();
     println!("{:?}", root_dir.iterate_dir(|dir| println!("{:?}", dir)));
     let my_file =
-        root_dir.open_file_in_dir("TEST.TXT", embedded_sdmmc::Mode::ReadWriteCreateOrAppend);
+        root_dir.open_file_in_dir("TEST.TXT", embedded_sdmmc::Mode::ReadWriteCreateOrTruncate);
     println!("{:?}", my_file);
     let my_file = my_file.unwrap();
 
@@ -100,7 +97,9 @@ async fn main(spawner: Spawner) -> ! {
         let now = time::Instant::now();
         for _ in 0..1024 {
             my_file.write(&buf).unwrap();
+            embassy_futures::yield_now().await;
         }
+        my_file.flush().unwrap();
         let diff = now.elapsed();
         println!("Writing a MB took {}", diff.as_millis());
     }
@@ -120,5 +119,16 @@ impl TimeSource for Clock {
             minutes: 0,
             seconds: 0,
         }
+    }
+}
+
+#[embassy_executor::task]
+async fn simulate_cpu_traffic() {
+    let mut buf = [0u8; 2048];
+    loop {
+        let mut buf1 = [0u8; 2048];
+        core::hint::black_box(&mut buf1);
+        buf.clone_from_slice(&buf1);
+        Timer::after_micros(5).await;
     }
 }
