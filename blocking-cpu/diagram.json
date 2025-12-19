@@ -1,0 +1,89 @@
+{
+    "version": 1,
+    "editor": "wokwi",
+    "parts": [
+        {
+            "type": "board-esp32-c3-devkitm-1",
+            "id": "esp",
+            "top": 0.59,
+            "left": 0.67,
+            "attrs": {
+                "flashSize": "16"
+            }
+        },
+        {
+            "type": "wokwi-microsd-card",
+            "rotate": 90,
+            "id": "sd",
+            "top": -90,
+            "left": 100,
+            "attrs": {}
+        }
+    ],
+    "connections": [
+        [
+            "esp:TX",
+            "$serialMonitor:RX",
+            "",
+            []
+        ],
+        [
+            "esp:RX",
+            "$serialMonitor:TX",
+            "",
+            []
+        ],
+        [
+            "esp:5V.1",
+            "sd:VCC",
+            "red",
+            [
+                "h0"
+            ]
+        ],
+        [
+            "esp:GND.7",
+            "sd:GND",
+            "black",
+            [
+                "h0"
+            ]
+        ],
+        [
+            "esp:6",
+            "sd:SCK",
+            "green",
+            [
+                "h0"
+            ]
+        ],
+        [
+            "esp:7",
+            "sd:DI",
+            "blue",
+            [
+                "h0"
+            ]
+        ],
+        [
+            "esp:2",
+            "sd:DO",
+            "orange",
+            [
+                "h0"
+            ]
+        ],
+        [
+            "esp:10",
+            "sd:CS",
+            "purple",
+            [
+                "h0"
+            ]
+        ]
+    ],
+    "serialMonitor": {
+        "display": "terminal",
+        "convertEol": true
+    }
+}
