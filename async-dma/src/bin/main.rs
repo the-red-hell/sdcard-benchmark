@@ -102,7 +102,7 @@ async fn main(spawner: Spawner) -> ! {
             let _ = sd
                 .spi()
                 .bus_mut()
-                .apply_config(&Config::default().with_frequency(time::Rate::from_mhz(25)));
+                .apply_config(&Config::default().with_frequency(time::Rate::from_mhz(80)));
             println!("Initialization complete!");
 
             break;
