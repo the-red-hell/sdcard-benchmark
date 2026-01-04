@@ -29,8 +29,9 @@ embassy-net = { version = "0.7.1", features = [
 embedded-io = "0.7.1"
 embedded-io-async = "0.6.1"
 esp-alloc = "0.9.0"
-panic-rtt-target = "0.2.0"
-rtt-target = "0.6.2"
+panic-rtt-target = { version = "0.2.0", features = ["defmt"] }
+rtt-target = { version = "0.6.2", features = ["defmt"] }
+defmt = "1.0.1"
 # for more networking protocol support see https://crates.io/crates/edge-net
 embassy-executor = { version = "0.9.1", features = [] }
 embassy-time = "0.5.0"
@@ -63,10 +64,14 @@ esp-println = { version = "0.16.1", default-features = false, features = [
   "critical-section",
 ] }
 
-sdspi = { version = "0.1.0", path = "sdspi" }
+sdspi = { version = "0.1.0", path = "sdspi", features = ["defmt"] }
 aligned = "0.4.2"
-block-device-adapters = { version = "0.2.0", path = "block-device-adapters" }
-embedded-fatfs = { version = "0.1.0", path = "embedded-fatfs", default-features = false }
+block-device-adapters = { version = "0.2.0", path = "block-device-adapters", features = [
+  "defmt",
+] }
+embedded-fatfs = { version = "0.1.0", path = "embedded-fatfs", default-features = false, features = [
+  "defmt",
+] }
 embedded-hal-async = "1.0.0"
 embedded-hal-bus = { version = "0.3.0", features = ["async"] }
 

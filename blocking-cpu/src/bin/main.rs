@@ -9,6 +9,7 @@
 use embassy_executor::Spawner;
 use embassy_time::Timer;
 use embedded_hal_bus::spi::ExclusiveDevice;
+use embedded_sdmmc::sdcard::AcquireOpts;
 use embedded_sdmmc::{TimeSource, Timestamp};
 use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
@@ -42,6 +43,7 @@ async fn main(spawner: Spawner) -> ! {
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
 
     defmt::info!("Embassy initialized!");
+    println!("Embassy initialized!");
 
     let radio_init = esp_radio::init().expect("Failed to initialize Wi-Fi/BLE controller");
     let (mut _wifi_controller, _interfaces) =
@@ -51,17 +53,30 @@ async fn main(spawner: Spawner) -> ! {
     let _spawned = spawner.spawn(simulate_cpu_traffic());
 
     // --- SPI ---
+
+    // // WOKWI
+    // let spi_bus = Spi::new(
+    //     peripherals.SPI2,
+    //     spi::master::Config::default().with_frequency(time::Rate::from_khz(250)),
+    // )
+    // .unwrap()
+    // .with_sck(peripherals.GPIO6)
+    // .with_miso(peripherals.GPIO2)
+    // .with_mosi(peripherals.GPIO7);
+
     let spi_bus = Spi::new(
         peripherals.SPI2,
-        spi::master::Config::default().with_frequency(time::Rate::from_khz(250)),
+        spi::master::Config::default().with_frequency(time::Rate::from_khz(100)),
     )
     .unwrap()
-    .with_sck(peripherals.GPIO6)
-    .with_miso(peripherals.GPIO2)
-    .with_mosi(peripherals.GPIO7);
+    .with_sck(peripherals.GPIO4)
+    .with_miso(peripherals.GPIO5)
+    .with_mosi(peripherals.GPIO6);
 
     let cs = gpio::Output::new(
-        peripherals.GPIO10,
+        // // WOKWI
+        // peripherals.GPIO10,
+        peripherals.GPIO7,
         esp_hal::gpio::Level::High,
         gpio::OutputConfig::default(),
     );
@@ -71,28 +86,57 @@ async fn main(spawner: Spawner) -> ! {
     let spi_device = ExclusiveDevice::new(spi_bus, cs, delay).unwrap();
 
     // --- SD Card ---
-    let sdcard = embedded_sdmmc::SdCard::new(spi_device, delay);
-    println!("Card size is {} MB", sdcard.num_bytes().unwrap() / 1024);
+    let sdcard = embedded_sdmmc::SdCard::new_with_options(
+        spi_device,
+        delay,
+        AcquireOpts {
+            use_crc: false,
+            acquire_retries: 50,
+        },
+    );
+    // println!("Card size is {:?} MB", sdcard.num_bytes());
+    let num_bytes = loop {
+        match sdcard.num_bytes() {
+            Ok(num_bytes) => break num_bytes,
+            Err(e) => {
+                defmt::warn!("failed to initialize card with error {:?}", e);
+                delay.delay_millis(500);
+            }
+        }
+    };
+    defmt::info!("Card size is {:?} MB", num_bytes);
 
     sdcard.spi(|spi| {
         spi.bus_mut()
-            .apply_config(&spi::master::Config::default().with_frequency(time::Rate::from_mhz(80)))
+            .apply_config(&spi::master::Config::default().with_frequency(time::Rate::from_mhz(25)))
             .unwrap()
     });
     let volume_mgr = embedded_sdmmc::VolumeManager::new(sdcard, Clock);
-    let volume0 = volume_mgr
-        .open_volume(embedded_sdmmc::VolumeIdx(0))
-        .unwrap();
+    defmt::info!("has opened handles: {}", volume_mgr.has_open_handles());
+    let volume0 = loop {
+        match volume_mgr.open_volume(embedded_sdmmc::VolumeIdx(0)) {
+            Ok(volume0) => break volume0,
+            Err(e) => {
+                defmt::warn!("failed to open volume 0 with error {:?}", e);
+                delay.delay_millis(1000);
+            }
+        }
+    };
     println!("Volume 0: {:?}", volume0);
+    defmt::info!("Volume 0: {:?}", volume0);
     let root_dir = volume0.open_root_dir().unwrap();
     println!("{:?}", root_dir.iterate_dir(|dir| println!("{:?}", dir)));
+    defmt::info!("{:?}", root_dir.iterate_dir(|dir| println!("{:?}", dir)));
     let my_file =
         root_dir.open_file_in_dir("TEST.TXT", embedded_sdmmc::Mode::ReadWriteCreateOrTruncate);
     println!("{:?}", my_file);
+    defmt::info!("{:?}", my_file);
     let my_file = my_file.unwrap();
 
+    let mut avg = 0;
+
     let mut buf = [65_u8; 1024];
-    loop {
+    for i in 1..=10 {
         core::hint::black_box(&mut buf);
         let now = time::Instant::now();
         for _ in 0..1024 {
@@ -100,9 +144,19 @@ async fn main(spawner: Spawner) -> ! {
             embassy_futures::yield_now().await;
         }
         my_file.flush().unwrap();
-        let diff = now.elapsed();
-        println!("Writing a MB took {}", diff.as_millis());
+        let diff = now.elapsed().as_millis() as i64;
+        avg += (diff - avg) / i;
+        println!("Writing a MB took {} ms", diff);
+        defmt::info!("Writing a MB took {} ms", diff);
     }
+
+    my_file.close().unwrap();
+    root_dir.close().unwrap();
+    volume0.close().unwrap();
+
+    defmt::info!("The average time was: {} ms", avg);
+
+    loop {}
 
     // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.0.0/examples/src/bin
 }
